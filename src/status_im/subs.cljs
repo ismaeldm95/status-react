@@ -83,6 +83,7 @@
 (reg-root-key-sub :logged-in-since :logged-in-since)
 (reg-root-key-sub :link-previews-whitelist :link-previews-whitelist)
 (reg-root-key-sub :app-state :app-state)
+(reg-root-key-sub :waku/v2-peer-stats :peer-stats)
 
 ;;NOTE this one is not related to ethereum network
 ;; it is about cellular network/ wifi network
@@ -456,11 +457,13 @@
  :disconnected?
  :<- [:peers-count]
  :<- [:waku/v2-flag]
- (fn [[peers-count wakuv2-flag]]
-   ;; TODO Right now wakuv2 module in status-go
-   ;; does not report peer counts properly,
-   ;; so we always assume that we're connected
-   (if wakuv2-flag false (zero? peers-count))))
+ :<- [:waku/v2-peer-stats]
+ (fn [[peers-count wakuv2-flag peer-stats]]
+   ;; If wakuv2 is enabled,
+   ;; then fetch connectivity status from
+   ;; peer-stats (populated from "wakuv2.peerstats" status-go signal)
+   ;; Otherwise use peers-count fetched from "discovery.summary" signal
+   (if wakuv2-flag (not (:IsOnline peer-stats)) (zero? peers-count))))
 
 (re-frame/reg-sub
  :offline?

@@ -166,6 +166,7 @@
    "localnotifications_switchWalletNotifications" {}
    "localnotifications_notificationPreferences" {}
    "wallet_setInitialBlocksRange" {}
+   "wallet_suggestFees" {}
    "wallet_getTransfersByAddress" {}
    "wallet_watchTransaction" {}
    "wallet_checkRecentHistory" {}

@@ -384,16 +384,25 @@
    (concat
     (when (and outgoing edit-enabled)
       [{:on-press #(re-frame/dispatch [:chat.ui/edit-message message])
-        :label (i18n/label :t/edit)}])
+        :label    (i18n/label :t/edit)
+        :id       :edit}])
     (when show-input?
       [{:on-press #(re-frame/dispatch [:chat.ui/reply-to-message message])
-        :label    (i18n/label :t/message-reply)}])
+        :label    (i18n/label :t/message-reply)
+        :id       :reply}])
     [{:on-press #(react/copy-to-clipboard
                   (components.reply/get-quoted-text-with-mentions
                    (get content :parsed-text)))
-      :label    (i18n/label :t/sharing-copy-to-clipboard)}]
-    (when message-pin-enabled [{:on-press #(pin-message message)
-                                :label    (if pinned (i18n/label :t/unpin) (i18n/label :t/pin))}]))))
+      :label    (i18n/label :t/sharing-copy-to-clipboard)
+      :id       :copy}]
+    (when message-pin-enabled
+      [{:on-press #(pin-message message)
+        :label    (if pinned (i18n/label :t/unpin) (i18n/label :t/pin))
+        :id       (if pinned :unpin :pin)}])
+    (when outgoing
+      [{:on-press #(re-frame/dispatch [:chat.ui/delete-message message])
+        :label    (i18n/label :t/delete)
+        :id       :delete}]))))
 
 (defn collapsible-text-message [{:keys [mentioned]} _]
   (let [collapsed?   (reagent/atom false)

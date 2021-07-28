@@ -134,6 +134,15 @@
              (update-in [:chat/inputs current-chat-id :metadata]
                         dissoc :sending-image))}))
 
+(fx/defn delete-message
+  {:events [:chat.ui/delete-message]}
+  [_ {:keys [message-id]}]
+  {::json-rpc/call [{:method      "wakuext_deleteMessageAndSend"
+                     :params      [message-id]
+                     :js-response true
+                     :on-error    #(log/error "failed to delete message message " %)
+                     :on-success  #(log/info "messag deleted" %)}]})
+
 (fx/defn cancel-message-reply
   "Cancels stage message reply"
   {:events [:chat.ui/cancel-message-reply]}

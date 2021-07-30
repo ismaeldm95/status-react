@@ -4,7 +4,8 @@ from dateutil import parser
 from tests import marks
 from tests.base_test_case import MultipleDeviceTestCase, SingleDeviceTestCase
 from views.sign_in_view import SignInView
-from datetime import datetime, timedelta
+from datetime import timedelta
+from time import sleep
 
 
 class TestPublicChatMultipleDevice(MultipleDeviceTestCase):
@@ -120,8 +121,7 @@ class TestPublicChatMultipleDevice(MultipleDeviceTestCase):
         chat_1, chat_2 = home_1.join_public_chat(chat_name), home_2.join_public_chat(chat_name)
         home_1.get_back_to_home_view()
         message = 'test message'
-        chat_2.chat_message_input.send_keys(message)
-        chat_2.send_message_button.click()
+        chat_2.send_message(message)
 
         if not home_1.home_button.public_unread_messages.is_element_displayed():
             self.errors.append('New messages public chat badge is not shown on Home button')
@@ -177,6 +177,163 @@ class TestPublicChatMultipleDevice(MultipleDeviceTestCase):
         chat_element_1 = chat_1.chat_element_by_text(message_text)
         if not chat_element_1.is_element_displayed(sec=10) or chat_element_1.replied_message_text != emoji_unicode:
             self.errors.append('Reply message was not received by the sender')
+
+        self.errors.verify_no_errors()
+
+    @marks.testrail_id(6342)
+    @marks.critical
+    def test_different_status_in_timeline(self):
+        self.create_drivers(2)
+        device_1, device_2 = SignInView(self.drivers[0]), SignInView(self.drivers[1])
+        device_1_home, device_2_home = device_1.create_user(), device_2.create_user()
+        device_1_profile, device_2_profile = device_1_home.profile_button.click(), device_2_home.profile_button.click()
+        device_1_public_key, device_1_username = device_1_profile.get_public_key_and_username(return_username=True)
+
+        emoji_message = random.choice(list(emoji.EMOJI_UNICODE))
+        emoji_unicode = emoji.EMOJI_UNICODE[emoji_message]
+
+        device_1_home.just_fyi('Set status in profile')
+        statuses = {
+            '*formatted text*':'formatted text',
+            'https://www.youtube.com/watch?v=JjPWmEh2KhA' : 'Status Town Hall',
+            emoji.emojize(emoji_message) : emoji_unicode,
+
+        }
+        timeline = device_1.status_button.click()
+        for status in statuses.keys():
+            timeline.set_new_status(status)
+            sleep(60)
+
+        #timeline = device_1_home.get_chat_view()
+        timeline.element_by_translation_id("enable").wait_and_click()
+        timeline.element_by_translation_id("enable-all").wait_and_click()
+        timeline.close_modal_view_from_chat_button.click()
+        for status in statuses:
+            expected_value = statuses[status]
+            if not timeline.element_by_text_part(expected_value).is_element_displayed():
+                self.errors.append("Expected value %s is not shown" % expected_value)
+        text_status = 'some text'
+        timeline.set_new_status(text_status)
+        for timestamp in ('Now', '1M', '2M'):
+            if not timeline.element_by_text(timestamp).is_element_displayed():
+                self.errors.append("Expected timestamp %s is not shown in timeline" % timestamp)
+
+        device_2_home.just_fyi('Check that can see user status without adding him as contact')
+        device_2_profile.home_button.click()
+        device_2_chat = device_2_home.add_contact(device_1_public_key, add_in_contacts=False)
+        device_2_chat.chat_options.click()
+        device_2_chat.view_profile_button.click()
+        device_2_chat.element_by_translation_id("enable").scroll_and_click()
+        device_2_chat.element_by_translation_id("enable-all").wait_and_click()
+        device_2_chat.close_modal_view_from_chat_button.click()
+        for status in statuses:
+            device_2_chat.element_by_text_part(statuses['*formatted text*']).scroll_to_element()
+            expected_value = statuses[status]
+            if not device_2_chat.element_by_text_part(expected_value).is_element_displayed():
+                self.errors.append("Expected value %s is not shown in other user profile without adding to contacts" % expected_value)
+
+        device_2_home.just_fyi('Add device1 to contacts and check that status will be shown in timeline')
+        device_2_chat.close_button.click()
+        device_2_chat.add_to_contacts.click()
+        timeline_2 = device_2_chat.status_button.click()
+        for status in statuses:
+            expected_value = statuses[status]
+            if not timeline_2.element_by_text_part(expected_value).is_element_displayed():
+                self.errors.append("Expected value %s is not shown in timeline after adding user to contacts" % expected_value)
+
+        device_1_profile.just_fyi('Checking message tag and reactions on statuses')
+        tag_status = '#public-chat-to-redirect'
+        timeline.set_new_status(tag_status)
+        #timeline_2 = device_1_profile.get_chat_view()
+        public_chat_2 = device_2_home.get_chat_view()
+        timeline_2.element_starts_with_text(tag_status).click_until_presence_of_element(public_chat_2.user_name_text)
+        if not public_chat_2.user_name_text.text == tag_status[1:]:
+            self.errors.append('Could not redirect a user to a public chat tapping the tag message from timeline')
+        public_chat_2.back_button.click()
+
+        timeline.set_reaction(text_status)
+        status_with_reaction_1 = timeline.chat_element_by_text(text_status)
+        if status_with_reaction_1.emojis_below_message() != 1:
+            self.errors.append("Counter of reaction is not updated on your own status in timeline!")
+        device_2_home.get_chat(device_1_username).click()
+        device_2_chat.chat_options.click()
+        device_2_chat.view_profile_button.click()
+        status_with_reaction_2 = device_2_chat.chat_element_by_text(text_status)
+        if status_with_reaction_2.emojis_below_message(own=False) != 1:
+            self.errors.append("Counter of reaction is not updated on status of another user in profile!")
+
+
+
+        # for element in timeline.element_by_text(device_1_status), timeline.image_message_in_chat:
+        #     if not element.is_element_displayed():
+        #         self.drivers[0].fail('Status is not set')
+        #
+        # device_1_public_key, device_1_username = device_1_profile.get_public_key_and_username(return_username=True)
+        # [home.click() for home in [device_1_profile.home_button, device_2_profile.home_button]]
+        #
+        # device_1_home.just_fyi('start 1-1 chat')
+        # device_1_chat = device_1_home.add_contact(device_2_public_key)
+        #
+        # device_1_home.just_fyi('send image in 1-1 chat from Gallery, check options for sender')
+        # image_description = 'description'
+        # device_1_chat.show_images_button.click()
+        # device_1_chat.first_image_from_gallery.click()
+        # if not device_1_chat.cancel_send_image_button.is_element_displayed():
+        #     self.errors.append("Can't cancel sending images, expected image preview is not shown!")
+        # device_1_chat.chat_message_input.set_value(image_description)
+        # device_1_chat.send_message_button.click()
+        # device_1_chat.chat_message_input.click()
+        # for message in device_1_chat.image_message_in_chat, device_1_chat.chat_element_by_text(image_description):
+        #     if not message.is_element_displayed():
+        #         self.errors.append('Image or description is not shown in chat after sending for sender')
+        # device_1_chat.show_images_button.click()
+        # device_1_chat.image_from_gallery_button.click()
+        # device_1_chat.click_system_back_button()
+        # device_1_chat.image_message_in_chat.long_press_element()
+        # for element in device_1_chat.reply_message_button, device_1_chat.save_image_button:
+        #     if not element.is_element_displayed():
+        #         self.errors.append('Save and reply are not available on long-press on own image messages')
+        # if device_1_chat.view_profile_button.is_element_displayed():
+        #     self.errors.append('"View profile" is shown on long-press on own message')
+        #
+        # device_2_home.just_fyi('check image, description and options for receiver')
+        # device_2_chat = device_2_home.get_chat(device_1_username).click()
+        # for message in device_2_chat.image_message_in_chat, device_2_chat.chat_element_by_text(image_description):
+        #     if not message.is_element_displayed():
+        #         self.errors.append('Image or description is not shown in chat after sending for receiver')
+        #
+        # device_2_home.just_fyi('View user profile and check status')
+        # device_2_chat.chat_options.click()
+        # timeline_device_1 = device_2_chat.view_profile_button.click()
+        # for element in timeline_device_1.element_by_text(device_1_status), timeline_device_1.image_message_in_chat:
+        #     element.scroll_to_element()
+        #     if not element.is_element_displayed():
+        #         self.drivers[0].fail('Status of another user not shown when open another user profile')
+        # device_2_chat.close_button.click()
+        #
+        # device_2_home.just_fyi('check options on long-press image for receiver')
+        # device_2_chat.image_message_in_chat.long_press_element()
+        # for element in (device_2_chat.reply_message_button, device_2_chat.save_image_button):
+        #     if not element.is_element_displayed():
+        #         self.errors.append('Save and reply are not available on long-press on received image messages')
+        #
+        # device_1_home.just_fyi('save image')
+        # device_1_chat.save_image_button.click()
+        # device_1_chat.show_images_button.click_until_presence_of_element(device_1_chat.image_from_gallery_button)
+        # device_1_chat.image_from_gallery_button.click()
+        # device_1_chat.wait_for_element_starts_with_text('Recent')
+        # if not device_1_chat.recent_image_in_gallery.is_element_displayed():
+        #     self.errors.append('Saved image is not shown in Recent')
+        #
+        # device_2_home.just_fyi('reply to image message')
+        # device_2_chat.reply_message_button.click()
+        # if device_2_chat.quote_username_in_message_input.text != "↪ Replying to %s" % device_1_username:
+        #     self.errors.append("Username is not displayed in reply quote snippet replying to image message")
+        # reply_to_message_from_receiver = "image reply"
+        # device_2_chat.send_message(reply_to_message_from_receiver)
+        # reply_message = device_2_chat.chat_element_by_text(reply_to_message_from_receiver)
+        # if not reply_message.image_in_reply.is_element_displayed():
+        #     self.errors.append("Image is not displayed in reply")
 
         self.errors.verify_no_errors()
 

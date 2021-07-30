@@ -323,7 +323,9 @@
         (when (not= (/ width k) (first @dimensions))
           (reset! dimensions [(/ width k) image-max-height]))))))
 
-(defn message-content-image [{:keys [content outgoing in-popover?] :as message} {:keys [on-long-press]}]
+(defn message-content-image
+  [{:keys [content outgoing in-popover?] :as message}
+   {:keys [on-long-press]}]
   (let [dimensions (reagent/atom [image-max-width image-max-height])
         visible (reagent/atom false)
         uri (:image content)]
@@ -558,25 +560,26 @@
   [message-content-wrapper message
    [unknown-content-type message]])
 
-(defn chat-message [{:keys [outgoing display-photo? pinned pinned-by] :as message} space-keeper]
-  [:<>
-   [reactions/with-reaction-picker
-    {:message         message
-     :reactions       @(re-frame/subscribe [:chats/message-reactions (:message-id message) (:chat-id message)])
-     :picker-on-open  (fn []
-                        (space-keeper true))
-     :picker-on-close (fn []
-                        (space-keeper false))
-     :send-emoji      (fn [{:keys [emoji-id]}]
-                        (re-frame/dispatch [::models.reactions/send-emoji-reaction
-                                            {:message-id (:message-id message)
-                                             :emoji-id   emoji-id}]))
-     :retract-emoji   (fn [{:keys [emoji-id emoji-reaction-id]}]
-                        (re-frame/dispatch [::models.reactions/send-emoji-reaction-retraction
-                                            {:message-id        (:message-id message)
-                                             :emoji-id          emoji-id
-                                             :emoji-reaction-id emoji-reaction-id}]))
-     :render          ->message}]
-   (when pinned
-     [react/view {:style (style/pin-indicator-container outgoing)}
-      [pinned-by-indicator outgoing display-photo? pinned-by]])])
+(defn chat-message [{:keys [outgoing display-photo? pinned pinned-by hidden-in-ui?] :as message} space-keeper]
+  (when-not hidden-in-ui?
+    [:<>
+     [reactions/with-reaction-picker
+      {:message         message
+       :reactions       @(re-frame/subscribe [:chats/message-reactions (:message-id message) (:chat-id message)])
+       :picker-on-open  (fn []
+                          (space-keeper true))
+       :picker-on-close (fn []
+                          (space-keeper false))
+       :send-emoji      (fn [{:keys [emoji-id]}]
+                          (re-frame/dispatch [::models.reactions/send-emoji-reaction
+                                              {:message-id (:message-id message)
+                                               :emoji-id   emoji-id}]))
+       :retract-emoji   (fn [{:keys [emoji-id emoji-reaction-id]}]
+                          (re-frame/dispatch [::models.reactions/send-emoji-reaction-retraction
+                                              {:message-id        (:message-id message)
+                                               :emoji-id          emoji-id
+                                               :emoji-reaction-id emoji-reaction-id}]))
+       :render          ->message}]
+     (when pinned
+       [react/view {:style (style/pin-indicator-container outgoing)}
+        [pinned-by-indicator outgoing display-photo? pinned-by]])]))

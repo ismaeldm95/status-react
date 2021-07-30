@@ -134,14 +134,22 @@
              (update-in [:chat/inputs current-chat-id :metadata]
                         dissoc :sending-image))}))
 
+(fx/defn add-message-hidden-flag
+  {:events [::add-message-hidden-flag]}
+  [{:keys [db]} chat-id message-id]
+  {:db (assoc-in db [:messages chat-id message-id :hidden-in-ui?] true)})
+
 (fx/defn delete-message
+  "Does't delete from db, this is a soft delete"
   {:events [:chat.ui/delete-message]}
-  [_ {:keys [message-id]}]
+  [{:keys [db] :as cofx} {:keys [message-id chat-id] :as message}]
   {::json-rpc/call [{:method      "wakuext_deleteMessageAndSend"
                      :params      [message-id]
                      :js-response true
                      :on-error    #(log/error "failed to delete message message " %)
-                     :on-success  #(log/info "messag deleted" %)}]})
+                     :on-success  #(do
+                                     (chat.message/hide-message cofx chat-id message-id)
+                                     (re-frame/dispatch [::add-message-hidden-flag chat-id message-id]))}]})
 
 (fx/defn cancel-message-reply
   "Cancels stage message reply"
